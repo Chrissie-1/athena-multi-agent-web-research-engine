@@ -11,7 +11,8 @@ short_description: A multi-agent research engine that critiques and rewrites its
 
 # Athena: Autonomous Multi-Agent Research Engine
 
-**Live demo:** _[add your Hugging Face Space URL here]_
+**Live demo:** _[add your Hugging Face Space URL here]_  
+**Project page:** [Architecture and build notes](https://claude.ai/code/artifact/59b6baae-541d-4e1c-ae49-3acd3545a7bc)
 
 Ask one complex question. Athena breaks it into research angles, searches the live web, reads
 and ranks the evidence, writes a cited report — then reviews its own draft and rewrites it.
