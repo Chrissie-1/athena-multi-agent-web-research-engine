@@ -92,10 +92,17 @@ python smoke_test.py  # full pipeline with the LLM stubbed - no API key needed
 
 ## Deploying to Hugging Face Spaces
 
-1. Create a Space with SDK **Gradio**, then push this folder to it.
-2. Settings → *Variables and secrets* → add `GROQ_API_KEY` as a **secret**.
-3. First build takes ~5 minutes while `sentence-transformers` downloads its weights; the model
-   is cached for every run after that.
+1. Create a Space with SDK **Gradio**.
+2. In the Space: Settings → *Variables and secrets* → add `GROQ_API_KEY` as a **secret**.
+   Without it the app loads and warns; searching works, writing fails.
+3. In this repo: add an `HF_TOKEN` secret (a write token from
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)) and an `HF_SPACE`
+   variable holding the Space id, e.g. `your-name/athena-research-agent`.
+
+From then on every push to `main` mirrors itself into the Space
+([`.github/workflows/sync-to-space.yml`](.github/workflows/sync-to-space.yml)); the workflow
+no-ops until both values exist. The first build takes ~5 minutes while `sentence-transformers`
+downloads its weights, which are cached for every run after that.
 
 ## Configuration
 

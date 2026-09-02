@@ -23,6 +23,15 @@ evidence, drafts a cited report — then **critiques its own draft and rewrites 
 *Planner → Searcher → Reader (RAG) → Writer → Critic → Reflection*
 """
 
+# utils loads secrets.env when `main` is imported above, so the environment is
+# already settled by the time this runs.
+KEY_MISSING = not os.getenv("GROQ_API_KEY")
+
+MISSING_KEY_BANNER = """> ⚠️ **No `GROQ_API_KEY` found — searching will work, writing will fail.**
+> Locally: copy `secrets.env.example` to `secrets.env` and add a free key from
+> [console.groq.com](https://console.groq.com). On a Space: add it under
+> *Settings → Variables and secrets*, then restart the Space."""
+
 EXAMPLES = [
     "What are the latest breakthroughs in Mixture of Experts?",
     "What are the latest breakthroughs in sparse attention?",
@@ -92,6 +101,8 @@ if not _LAUNCH_TAKES_THEME:
 
 with gr.Blocks(**_BLOCKS_KWARGS) as demo:
     gr.Markdown(INTRO)
+    if KEY_MISSING:
+        gr.Markdown(MISSING_KEY_BANNER)
 
     with gr.Row():
         query_box = gr.Textbox(
