@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Athena: a six-agent research engine that plans, searches, reads and cites the live web, then critiques and rewrites its own report.">
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Athena Research Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #F1F4F7;
+    --surface: #FFFFFF;
+    --sunk: #E8EDF2;
+    --ink: #101720;
+    --muted: #5A6673;
+    --faint: #8C97A3;
+    --line: #D5DCE4;
+    --accent: #10646A;
+    --accent-soft: #DCEBEC;
+    --flag: #A85320;
+    --flag-soft: #F6E7DC;
+
+    --display: "Newsreader", Georgia, "Times New Roman", serif;
+    --body: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0C1116;
+      --surface: #141B22;
+      --sunk: #101820;
+      --ink: #E4EAF0;
+      --muted: #94A2B0;
+      --faint: #6C7B89;
+      --line: #24303A;
+      --accent: #55C2BC;
+      --accent-soft: #16302F;
+      --flag: #E2965A;
+      --flag-soft: #33231A;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0C1116;
+    --surface: #141B22;
+    --sunk: #101820;
+    --ink: #E4EAF0;
+    --muted: #94A2B0;
+    --faint: #6C7B89;
+    --line: #24303A;
+    --accent: #55C2BC;
+    --accent-soft: #16302F;
+    --flag: #E2965A;
+    --flag-soft: #33231A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 56px 28px 88px;
+    display: flex;
+    flex-direction: column;
+    gap: 60px;
+  }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 0;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: clamp(2.5rem, 6vw, 3.6rem);
+    line-height: 1.04;
+    letter-spacing: -0.021em;
+    text-wrap: balance;
+    margin: 10px 0 0;
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 1.55rem;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+    margin: 0;
+  }
+
+  h3 {
+    font-family: var(--body);
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: -0.003em;
+    margin: 0;
+  }
+
+  p { margin: 0; max-width: 68ch; }
+  .lede { font-size: 1.14rem; color: var(--muted); max-width: 60ch; margin-top: 18px; }
+
+  section { display: flex; flex-direction: column; gap: 22px; }
+  .head { display: flex; flex-direction: column; gap: 8px; }
+
+  /* ---------- masthead ---------- */
+
+  .masthead { border-bottom: 1px solid var(--line); padding-bottom: 34px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+  .chip {
+    font-family: var(--mono);
+    font-size: 0.73rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 4px 9px;
+  }
+  .chip b { color: var(--ink); font-weight: 500; }
+
+  /* ---------- pipeline rail ---------- */
+
+  .rail-wrap { overflow-x: auto; padding-bottom: 6px; }
+  .rail { display: block; width: 100%; min-width: 760px; height: auto; }
+
+  .rail-box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+  .rail-box.is-writer { stroke: var(--accent); }
+  .rail-box.is-critic { fill: var(--flag-soft); stroke: var(--flag); }
+  .rail-num { fill: var(--faint); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; }
+  .rail-name { fill: var(--ink); font-family: var(--body); font-size: 14.5px; font-weight: 600; }
+  .rail-out { fill: var(--muted); font-family: var(--mono); font-size: 10.5px; }
+  .rail-line { stroke: var(--accent); stroke-width: 1.4; fill: none; }
+  .rail-head { fill: var(--accent); }
+  .rail-loop { stroke: var(--flag); stroke-width: 1.6; fill: none; stroke-dasharray: 5 3; }
+  .rail-loop-head { fill: var(--flag); }
+  .rail-loop-label { fill: var(--flag); font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; }
+
+  /* ---------- funnel ---------- */
+
+  .funnel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .funnel div { padding: 18px 20px; border-right: 1px solid var(--line); }
+  .funnel div:last-child { border-right: none; }
+  .funnel .n {
+    font-family: var(--display);
+    font-size: 1.85rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+  .funnel .k {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    color: var(--faint);
+    display: block;
+    margin-bottom: 6px;
+  }
+  .funnel .s { font-size: 0.85rem; color: var(--muted); }
+  .funnel .keep .n { color: var(--accent); }
+
+  /* ---------- stage list ---------- */
+
+  .stages { display: flex; flex-direction: column; }
+  .stage {
+    display: grid;
+    grid-template-columns: 34px 148px 1fr;
+    gap: 18px;
+    align-items: baseline;
+    padding: 15px 0;
+    border-top: 1px solid var(--line);
+  }
+  .stage:last-child { border-bottom: 1px solid var(--line); }
+  .stage .i { font-family: var(--mono); font-size: 0.78rem; color: var(--faint); }
+  .stage .f { font-family: var(--mono); font-size: 0.82rem; color: var(--accent); }
+  .stage .d { color: var(--muted); font-size: 0.94rem; }
+  .stage .d b { color: var(--ink); font-weight: 500; }
+  .stage.reflect { background: linear-gradient(90deg, var(--flag-soft), transparent 62%); }
+  .stage.reflect .f { color: var(--flag); }
+
+  /* ---------- decisions ---------- */
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .note { background: var(--surface); padding: 20px 22px; display: flex; flex-direction: column; gap: 9px; }
+  .note p { font-size: 0.92rem; color: var(--muted); }
+  .note code, .stage code, .runlog b { font-family: var(--mono); font-size: 0.86em; color: var(--ink); }
+
+  /* ---------- run log ---------- */
+
+  .runlog {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    padding: 20px 22px;
+    font-family: var(--mono);
+    font-size: 0.79rem;
+    line-height: 1.85;
+    color: var(--muted);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .runlog .ok { color: var(--accent); }
+  .runlog .bad { color: var(--flag); }
+  .runlog b { color: var(--ink); font-weight: 500; }
+
+  .callout {
+    border-left: 2px solid var(--flag);
+    padding: 2px 0 2px 18px;
+    color: var(--muted);
+    font-size: 0.94rem;
+  }
+  .callout b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- citation demo ---------- */
+
+  .cite-demo {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 62ch;
+  }
+  .cite-demo .body { font-family: var(--display); font-size: 1.02rem; }
+  .src {
+    font-family: var(--mono);
+    font-size: 0.72em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 1px 4px;
+    white-space: nowrap;
+  }
+  .refs { border-top: 1px solid var(--line); padding-top: 12px; font-family: var(--mono); font-size: 0.76rem; color: var(--muted); line-height: 1.9; }
+  .refs span { color: var(--accent); }
+
+  /* ---------- run it ---------- */
+
+  pre.sh {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    padding: 18px 20px;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.9;
+    overflow-x: auto;
+    margin: 0;
+    color: var(--ink);
+  }
+  pre.sh .c { color: var(--faint); }
+  pre.sh .p { color: var(--accent); }
+
+  ol.next { margin: 0; padding-left: 1.15em; color: var(--muted); max-width: 68ch; display: flex; flex-direction: column; gap: 10px; }
+  ol.next b { color: var(--ink); font-weight: 600; }
+  ol.next::marker { color: var(--faint); }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 22px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+  }
+
+  @media (max-width: 620px) {
+    .page { padding: 40px 20px 64px; gap: 48px; }
+    .stage { grid-template-columns: 26px 1fr; }
+    .stage .f { grid-column: 2; }
+    .stage .d { grid-column: 2; }
+  }
+</style>
+
+</head>
+<body>
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Multi-agent research engine · portfolio build</p>
+    <h1>Athena</h1>
+    <p class="lede">Six agents over one shared state object. It plans the angles, reads the live
+      web, drafts a cited report — then reviews its own draft and rewrites it.</p>
+    <div class="chips">
+      <span class="chip">LLM <b>llama-3.3-70b</b> via Groq</span>
+      <span class="chip">Embeddings <b>all-MiniLM-L6-v2</b></span>
+      <span class="chip">Index <b>FAISS IndexFlatIP</b></span>
+      <span class="chip">Search <b>DuckDuckGo</b></span>
+      <span class="chip">UI <b>Gradio</b></span>
+      <span class="chip">Cost <b>$0</b></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Architecture</p>
+      <h2>The pipeline, and the one arrow that runs backwards</h2>
+    </div>
+
+    <div class="rail-wrap">
+      <svg class="rail" viewBox="0 0 980 252" role="img"
+           aria-label="Pipeline: Planner produces 3 sub-questions, Searcher 15 URLs, Reader 662 chunks, Retriever 9 chunks, Writer a cited draft, Critic 3 findings, which loops back into the Writer as a reflection step.">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path class="rail-head" d="M0,0 L10,5 L0,10 z"></path>
+          </marker>
+          <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path class="rail-loop-head" d="M0,0 L10,5 L0,10 z"></path>
+          </marker>
+        </defs>
+
+        <g>
+          <rect class="rail-box" x="20" y="76" width="140" height="62"></rect>
+          <text class="rail-num" x="34" y="99">01</text>
+          <text class="rail-name" x="34" y="121">Planner</text>
+          <text class="rail-out" x="34" y="158">3 sub-questions</text>
+        </g>
+        <line class="rail-line" x1="164" y1="107" x2="174" y2="107" marker-end="url(#a)"></line>
+
+        <g>
+          <rect class="rail-box" x="180" y="76" width="140" height="62"></rect>
+          <text class="rail-num" x="194" y="99">02</text>
+          <text class="rail-name" x="194" y="121">Searcher</text>
+          <text class="rail-out" x="194" y="158">15 URLs</text>
+        </g>
+        <line class="rail-line" x1="324" y1="107" x2="334" y2="107" marker-end="url(#a)"></line>
+
+        <g>
+          <rect class="rail-box" x="340" y="76" width="140" height="62"></rect>
+          <text class="rail-num" x="354" y="99">03</text>
+          <text class="rail-name" x="354" y="121">Reader</text>
+          <text class="rail-out" x="354" y="158">662 chunks</text>
+        </g>
+        <line class="rail-line" x1="484" y1="107" x2="494" y2="107" marker-end="url(#a)"></line>
+
+        <g>
+          <rect class="rail-box" x="500" y="76" width="140" height="62"></rect>
+          <text class="rail-num" x="514" y="99">04</text>
+          <text class="rail-name" x="514" y="121">Retriever</text>
+          <text class="rail-out" x="514" y="158">9 chunks kept</text>
+        </g>
+        <line class="rail-line" x1="644" y1="107" x2="654" y2="107" marker-end="url(#a)"></line>
+
+        <g>
+          <rect class="rail-box is-writer" x="660" y="76" width="140" height="62"></rect>
+          <text class="rail-num" x="674" y="99">05</text>
+          <text class="rail-name" x="674" y="121">Writer</text>
+          <text class="rail-out" x="674" y="158">cited draft</text>
+        </g>
+        <line class="rail-line" x1="804" y1="107" x2="814" y2="107" marker-end="url(#a)"></line>
+
+        <g>
+          <rect class="rail-box is-critic" x="820" y="76" width="140" height="62"></rect>
+          <text class="rail-num" x="834" y="99">06</text>
+          <text class="rail-name" x="834" y="121">Critic</text>
+          <text class="rail-out" x="834" y="158">3 findings</text>
+        </g>
+
+        <path class="rail-loop" d="M890,178 C890,224 730,224 730,152" marker-end="url(#b)"></path>
+        <text class="rail-loop-label" x="810" y="245" text-anchor="middle">reflection — the draft goes back</text>
+      </svg>
+    </div>
+
+    <p>Every stage reads from and writes into one <code>ResearchState</code> object, so the agents
+      communicate through typed state rather than string-passing. Five of the six arrows are the
+      obvious ones. The sixth is the project: the Critic's findings return to the Writer, and the
+      report you read is the second draft.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Context budget</p>
+      <h2>Reading a lot, sending a little</h2>
+    </div>
+
+    <div class="funnel">
+      <div>
+        <span class="k">Scraped</span>
+        <span class="n">662</span>
+        <span class="s">chunks from 15 pages, ~500 chars each</span>
+      </div>
+      <div class="keep">
+        <span class="k">Retrieved</span>
+        <span class="n">9</span>
+        <span class="s">top-3 per sub-question, ranked by cosine similarity</span>
+      </div>
+      <div>
+        <span class="k">Sent to the writer</span>
+        <span class="n">~1.5k</span>
+        <span class="s">tokens of evidence, each tagged with its source URL</span>
+      </div>
+    </div>
+
+    <p>The naive version of this app hands every scraped chunk to the writer and overflows the
+      context window. Embedding-ranked retrieval is what keeps the prompt small — and small
+      prompts are why the citations stay accurate: the model can only cite what it was shown.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Agents</p>
+      <h2>What each one is responsible for</h2>
+    </div>
+
+    <div class="stages">
+      <div class="stage">
+        <span class="i">01</span><span class="f">planner.py</span>
+        <span class="d">Splits the question into <b>3 search-optimized sub-questions</b> in JSON
+          mode. Malformed JSON is recovered with a regex; an empty plan falls back to the raw query.</span>
+      </div>
+      <div class="stage">
+        <span class="i">02</span><span class="f">searcher.py</span>
+        <span class="d">DuckDuckGo, <b>one result per domain</b> so the evidence stays diverse.
+          Social and video hosts are filtered out; a rate limit falls through to known-good URLs
+          rather than returning nothing mid-demo.</span>
+      </div>
+      <div class="stage">
+        <span class="i">03</span><span class="f">reader.py</span>
+        <span class="d">Fetches with a browser user-agent, then <b>trafilatura</b> with a
+          BeautifulSoup fallback. Content-type and size guards, and every fetch wrapped — one dead
+          link cannot tank a report.</span>
+      </div>
+      <div class="stage">
+        <span class="i">04</span><span class="f">retriever.py</span>
+        <span class="d">MiniLM embeddings, normalized, into a <b>FAISS inner-product index</b>.
+          Keeps the top 3 chunks per sub-question and carries each one's source URL with it.</span>
+      </div>
+      <div class="stage">
+        <span class="i">05</span><span class="f">writer.py</span>
+        <span class="d">Writes the report against the retrieved evidence only, with inline
+          <b>[Source N]</b> markers and an auto-generated reference list.</span>
+      </div>
+      <div class="stage reflect">
+        <span class="i">06</span><span class="f">critic.py</span>
+        <span class="d">Three findings: <b>uncited claims, missing angles, vague hedging</b>. The
+          critique goes back to the writer, which rewrites — streaming — into the final report.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Citations</p>
+      <h2>A source number means one page, everywhere</h2>
+    </div>
+
+    <div class="cite-demo">
+      <p class="body">Sparse routing activates a fraction of parameters per token, so serving cost
+        scales with active experts rather than total parameters <span class="src">[Source 3]</span>.
+        Reported throughput gains vary by hardware and batch size <span class="src">[Source 5]</span>.</p>
+      <div class="refs">
+        ## References<br>
+        1. <span>&lt;huggingface.co/blog/moe&gt;</span><br>
+        2. <span>&lt;vectorinstitute.ai/mixture-of-experts…&gt;</span><br>
+        3. <span>&lt;arxiv.org/html/2507.11181v2&gt;</span>
+      </div>
+    </div>
+
+    <p>Numbering sources per sub-question is the obvious implementation and it is wrong: with three
+      sub-questions, <code>[Source 1]</code> would point at three different pages in one report. The
+      registry numbers every URL once across the whole run, so a marker is dereferenceable.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Verification</p>
+      <h2>What the pipeline actually did</h2>
+    </div>
+
+    <div class="runlog">[plan] 3 sub-questions
+[search] 5 urls for: Mixture of Experts inference cost and deployment limitations
+[read] 208 chunks from arxiv.org/html/2507.11181v2
+<span class="bad">[read] failed dl.acm.org/doi/10.1145/3731599.3767706 (HTTPError: 403 Forbidden)</span>
+<span class="bad">[read] failed allzonetech.com/llm-benchmark-wars-2025-2026 (ReadTimeout)</span>
+[read]   0 chunks from ieeexplore.ieee.org/document/11027953
+[retrieve] kept 3/356 chunks
+<span class="ok">✅ Done in 57s — 3 sub-questions, 6 sources, 1 self-revision.</span>
+[pipeline] citations numbered 1..6 globally, references section present
+<b>ALL CHECKS PASSED</b></div>
+
+    <p>An end-to-end run against the live web with the LLM stubbed, so orchestration, scraping,
+      retrieval and citation assembly are exercised without an API key. Three of fifteen fetches
+      failed — a 403, a read timeout, and a JavaScript-only page — and the report was produced
+      anyway. The Groq calls themselves are still unexercised: they need a key.</p>
+
+    <p class="callout"><b>One real bug, found by running it.</b> <code>faiss-cpu</code> and
+      <code>torch</code> each bundle their own OpenBLAS. On Windows their thread pools collide and
+      encoding dies mid-batch with a spurious "not enough memory" error — with 5.5 GB free. The
+      retriever caps BLAS threads on <code>win32</code> before torch loads.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Run it</p>
+      <h2>Local, headless, or deployed</h2>
+    </div>
+
+    <pre class="sh"><span class="c"># UI at 127.0.0.1:7860</span>
+<span class="p">pip</span> install -r requirements.txt
+<span class="p">cp</span> secrets.env.example secrets.env   <span class="c"># paste a free key from console.groq.com</span>
+<span class="p">python</span> app.py
+
+<span class="c"># or straight to markdown in reports/</span>
+<span class="p">python</span> main.py "What are the latest breakthroughs in Mixture of Experts?"
+
+<span class="c"># full pipeline, stubbed LLM, no key needed</span>
+<span class="p">python</span> smoke_test.py</pre>
+
+    <p>For Hugging Face Spaces: create a Gradio Space, push the folder, and add
+      <code>GROQ_API_KEY</code> as a repository secret. The README already carries the Space
+      frontmatter; the first build takes about five minutes while the embedding weights download.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Next</p>
+      <h2>What eight more hours would buy</h2>
+    </div>
+
+    <ol class="next">
+      <li><b>Parallelize the searcher and reader with asyncio.</b> Fetching is essentially the whole
+        latency budget and it is entirely I/O-bound — this alone should cut runtime by about 60%.</li>
+      <li><b>Add a Source Verifier agent</b> that cross-checks each claim against a second URL and
+        flags anything only one source supports.</li>
+      <li><b>Persist runs in a vector DB</b> so Athena remembers past reports and can answer
+        follow-ups without re-searching the same ground.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <span>948 lines across 11 modules</span>
+    <span>Planner · Searcher · Reader · Retriever · Writer · Critic</span>
+    <span>MIT</span>
+    <span><a href="https://github.com/Chrissie-1/athena-research-agent">github.com/Chrissie-1/athena-research-agent</a></span>
+  </footer>
+
+</div>
+
+</body>
+</html>
