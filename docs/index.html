@@ -318,12 +318,13 @@
     <p class="lede">Six agents over one shared state object. It plans the angles, reads the live
       web, drafts a cited report — then reviews its own draft and rewrites it.</p>
     <div class="chips">
-      <span class="chip">LLM <b>llama-3.3-70b</b> via Groq</span>
+      <span class="chip">LLM <b>gpt-oss-120b</b> via Groq</span>
       <span class="chip">Embeddings <b>all-MiniLM-L6-v2</b></span>
       <span class="chip">Index <b>FAISS IndexFlatIP</b></span>
       <span class="chip">Search <b>DuckDuckGo</b></span>
       <span class="chip">UI <b>Gradio</b></span>
       <span class="chip">Cost <b>$0</b></span>
+      <span class="chip">Verified <b>live run</b></span>
     </div>
   </header>
 
@@ -335,7 +336,7 @@
 
     <div class="rail-wrap">
       <svg class="rail" viewBox="0 0 980 252" role="img"
-           aria-label="Pipeline: Planner produces 3 sub-questions, Searcher 15 URLs, Reader 662 chunks, Retriever 9 chunks, Writer a cited draft, Critic 3 findings, which loops back into the Writer as a reflection step.">
+           aria-label="Pipeline: Planner produces 3 sub-questions, Searcher 15 URLs, Reader the full page text, Retriever 9 chunks, Writer a cited draft, Critic grounded findings, which loop back into the Writer as a reflection step.">
         <defs>
           <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
             <path class="rail-head" d="M0,0 L10,5 L0,10 z"></path>
@@ -365,7 +366,7 @@
           <rect class="rail-box" x="340" y="76" width="140" height="62"></rect>
           <text class="rail-num" x="354" y="99">03</text>
           <text class="rail-name" x="354" y="121">Reader</text>
-          <text class="rail-out" x="354" y="158">662 chunks</text>
+          <text class="rail-out" x="354" y="158">full page text</text>
         </g>
         <line class="rail-line" x1="484" y1="107" x2="494" y2="107" marker-end="url(#a)"></line>
 
@@ -389,7 +390,7 @@
           <rect class="rail-box is-critic" x="820" y="76" width="140" height="62"></rect>
           <text class="rail-num" x="834" y="99">06</text>
           <text class="rail-name" x="834" y="121">Critic</text>
-          <text class="rail-out" x="834" y="158">3 findings</text>
+          <text class="rail-out" x="834" y="158">grounded findings</text>
         </g>
 
         <path class="rail-loop" d="M890,178 C890,224 730,224 730,152" marker-end="url(#b)"></path>
@@ -411,19 +412,19 @@
 
     <div class="funnel">
       <div>
-        <span class="k">Scraped</span>
-        <span class="n">662</span>
-        <span class="s">chunks from 15 pages, ~500 chars each</span>
+        <span class="k">Searched</span>
+        <span class="n">15</span>
+        <span class="s">pages across 3 sub-questions, scraped and chunked</span>
       </div>
       <div class="keep">
         <span class="k">Retrieved</span>
         <span class="n">9</span>
-        <span class="s">top-3 per sub-question, ranked by cosine similarity</span>
+        <span class="s">chunks, top-3 per sub-question by cosine similarity</span>
       </div>
       <div>
         <span class="k">Sent to the writer</span>
-        <span class="n">~1.5k</span>
-        <span class="s">tokens of evidence, each tagged with its source URL</span>
+        <span class="n">5,203</span>
+        <span class="s">characters of evidence, each tagged with its source URL</span>
       </div>
     </div>
 
@@ -468,8 +469,9 @@
       </div>
       <div class="stage reflect">
         <span class="i">06</span><span class="f">critic.py</span>
-        <span class="d">Three findings: <b>uncited claims, missing angles, vague hedging</b>. The
-          critique goes back to the writer, which rewrites — streaming — into the final report.</span>
+        <span class="d">Reads the draft <b>against the retrieved evidence</b> and classifies each
+          problem UNSUPPORTED, MISCITED, OVERSTATED or MISSED. Reports fewer findings when the
+          draft is sound. The critique goes back to the writer, which rewrites into the final.</span>
       </div>
     </div>
   </section>
@@ -499,30 +501,83 @@
 
   <section>
     <div class="head">
-      <p class="eyebrow">Verification</p>
-      <h2>What the pipeline actually did</h2>
+      <p class="eyebrow">The bug in the loop</p>
+      <h2>The Critic was writing the hallucinations</h2>
     </div>
 
-    <div class="runlog">[plan] 3 sub-questions
-[search] 5 urls for: Mixture of Experts inference cost and deployment limitations
-[read] 208 chunks from arxiv.org/html/2507.11181v2
-<span class="bad">[read] failed dl.acm.org/doi/10.1145/3731599.3767706 (HTTPError: 403 Forbidden)</span>
-<span class="bad">[read] failed allzonetech.com/llm-benchmark-wars-2025-2026 (ReadTimeout)</span>
-[read]   0 chunks from ieeexplore.ieee.org/document/11027953
-[retrieve] kept 3/356 chunks
-<span class="ok">✅ Done in 57s — 3 sub-questions, 6 sources, 1 self-revision.</span>
-[pipeline] citations numbered 1..6 globally, references section present
-<b>ALL CHECKS PASSED</b></div>
+    <p>The first run against a live model broke the pitch of the project. Asked to flag vague
+      claims, the Critic supplied an illustration of a better sentence — and the Writer copied the
+      invented figures straight in as findings.</p>
 
-    <p>An end-to-end run against the live web with the LLM stubbed, so orchestration, scraping,
-      retrieval and citation assembly are exercised without an API key. Three of fifteen fetches
-      failed — a 403, a read timeout, and a JavaScript-only page — and the report was produced
-      anyway. The Groq calls themselves are still unexercised: they need a key.</p>
+    <div class="runlog"><b>critique</b>  Provide concrete metrics (e.g.
+           <span class="bad">"load-balance loss reduced from 0.12 to 0.04,
+            routing latency cut by 23 %"</span>)
 
-    <p class="callout"><b>One real bug, found by running it.</b> <code>faiss-cpu</code> and
-      <code>torch</code> each bundle their own OpenBLAS. On Windows their thread pools collide and
-      encoding dies mid-batch with a spurious "not enough memory" error — with 5.5 GB free. The
-      retriever caps BLAS threads on <code>win32</code> before torch loads.</p>
+<b>final</b>     | Expert-Choice Routing | Load-balance loss dropped from
+           <span class="bad">0.12 -> 0.04</span> and routing latency fell by
+           <span class="bad">~23 %</span> on a 30 B MoE model (A100) |</div>
+
+    <p><code>0.12</code> appears in exactly two places in that run: the critique that invented it,
+      and the report that cited it. The cause was structural — neither the Critic nor the Reviser
+      could see the retrieved chunks, and a reviewer who cannot check a claim reaches instead for
+      what a thorough report <em>ought</em> to contain, then invents the evidence to demand.</p>
+
+    <div class="funnel">
+      <div>
+        <span class="k">Before · growth</span>
+        <span class="n">+54%</span>
+        <span class="s">draft to final, while citations fell 23 → 11</span>
+      </div>
+      <div class="keep">
+        <span class="k">After · growth</span>
+        <span class="n">+4%</span>
+        <span class="s">draft to final, citations rose 12 → 17</span>
+      </div>
+      <div class="keep">
+        <span class="k">After · grounding</span>
+        <span class="n">4/4</span>
+        <span class="s">numeric claims traceable to a retrieved passage</span>
+      </div>
+    </div>
+
+    <p>Three changes: both the Critic and the Reviser now receive the evidence; the Critic may not
+      invent example figures or demand content the sources cannot support; and the Reviser is told
+      that any number in a critique is illustrative and may never enter the report. A
+      <code>## Evidence Gaps</code> heading gives it somewhere to record what the sources do not
+      cover, instead of filling the gap from memory.</p>
+  </section>
+
+  <section>
+    <div class="head">
+      <p class="eyebrow">Verification</p>
+      <h2>Checking the report against its own evidence</h2>
+    </div>
+
+    <div class="runlog">numeric claims in final (list markers and citation ids excluded): 4
+
+              1  OK    first seen in: evidence
+              3  OK    first seen in: evidence
+             20  OK    first seen in: evidence
+            6.0  OK    first seen in: evidence
+
+citations: 12 all-ASCII, ids [1, 2, 3, 4], refs available 1..4
+out-of-range ids: none
+
+<span class="ok">RESULT: PASS - every numeric claim traces to the evidence</span></div>
+
+    <p>Every number in the finished report is extracted and tested for membership in the 5,203
+      characters of retrieved text. The check catches <em>fabricated</em> figures, which is the
+      failure this pipeline actually exhibited. It does not catch a number that is present in the
+      evidence but attached to the wrong subject — that is a miscitation, and only reading the
+      passages finds it. Both were done here.</p>
+
+    <p class="callout"><b>Two real bugs, found by running it.</b> <code>faiss-cpu</code> and
+      <code>torch</code> each bundle their own OpenBLAS; on Windows their thread pools collide and
+      encoding dies mid-batch with a spurious "not enough memory" error, with 5.5 GB free. And the
+      model renders citations as <code>[Source&#8239;3]</code> with a narrow no-break space —
+      visually identical to the documented format, invisible in a terminal, and fatal to any
+      parser. Normalising the markers in code beats asking a model to be careful about characters
+      it cannot see.</p>
   </section>
 
   <section>
