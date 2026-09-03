@@ -6,3 +6,6 @@ __pycache__/
 venv/
 reports/
 .cache/
+artifacts.md
+artifacts_v*.md
+*.log

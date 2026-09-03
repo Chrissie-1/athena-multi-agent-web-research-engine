@@ -4,17 +4,22 @@ import json
 import os
 import re
 import time
+from pathlib import Path
 from typing import Iterator, List, Optional
 
 from dotenv import load_dotenv
-from groq import Groq
+from groq import APIConnectionError, APITimeoutError, Groq, InternalServerError, RateLimitError
+
+# Worth another attempt; anything else (bad key, unknown model, malformed request)
+# fails the same way every time and should surface immediately.
+TRANSIENT = (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)
 
 # secrets.env is the local convention; .env works too, and on HF Spaces the key
 # arrives as a repository secret already in the environment.
 load_dotenv("secrets.env")
 load_dotenv()
 
-MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 _client: Optional[Groq] = None
 
 
@@ -57,7 +62,7 @@ def call_llm(
                 return _stream_tokens(get_client().chat.completions.create(stream=True, **kwargs))
             response = get_client().chat.completions.create(**kwargs)
             return response.choices[0].message.content or ""
-        except Exception as exc:  # rate limits, 5xx, dropped connections
+        except TRANSIENT as exc:
             if attempt == max_retries - 1:
                 raise
             wait = 2 ** attempt * 2
@@ -83,6 +88,35 @@ def extract_json(text: str) -> dict:
     if not match:
         raise ValueError(f"No JSON object found in model output: {text[:200]!r}")
     return json.loads(match.group(0))
+
+
+PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
+_prompt_cache: dict = {}
+
+
+def load_prompt(name: str) -> str:
+    """Read prompts/<name>.txt. Kept out of the Python so wording can be tuned alone."""
+    if name not in _prompt_cache:
+        _prompt_cache[name] = (PROMPT_DIR / f"{name}.txt").read_text(encoding="utf-8")
+    return _prompt_cache[name]
+
+
+def render(template: str, **values: str) -> str:
+    """Fill {{placeholders}}. Not str.format, so literal JSON braces need no escaping."""
+    for key, value in values.items():
+        template = template.replace("{{" + key + "}}", value)
+    return template
+
+
+# gpt-oss renders citations with typographic spacing - [Source 3] with a narrow
+# no-break space, and sometimes CJK lenticular brackets. It looks identical and breaks
+# every parser looking for the documented [Source N]. Enforce the format here rather
+# than asking a model to be careful about invisible characters.
+_CITATION = re.compile(r"[\[【]\s*Source\s*(\d+)\s*[\]】]")
+
+
+def normalize_citations(text: str) -> str:
+    return _CITATION.sub(lambda m: f"[Source {m.group(1)}]", text)
 
 
 def clean_text(html: str) -> str:

@@ -41,7 +41,7 @@ so agents communicate through structured state rather than string passing.
 | Reader | `reader.py` | Fetches with a browser UA, trafilatura → BeautifulSoup, paragraph-aware chunking |
 | Retriever | `retriever.py` | `all-MiniLM-L6-v2` embeddings + FAISS inner-product search, top 3 chunks |
 | Writer | `writer.py` | Report with globally numbered `[Source X]` citations + reference list |
-| Critic | `critic.py` | Reviews for unsupported claims, missing angles, vague statements |
+| Critic | `critic.py` | Checks the draft **against the retrieved evidence** for unsupported claims |
 | Reflection | `main.py` | Feeds the critique back to the Writer, streams the revised report |
 
 ## Why this matters
@@ -63,6 +63,39 @@ so agents communicate through structured state rather than string passing.
 The naive version of this app feeds every scraped chunk to the Writer and blows the context
 window. Athena keeps the top 3 chunks (~500 chars each) per sub-question — roughly 1.5k tokens
 of evidence total — which is why the Writer stays fast and the citations stay accurate.
+
+## Does the reflection loop actually work?
+
+Same question, one run before the prompt fix and one after:
+
+| | before | after |
+| --- | --- | --- |
+| Draft → final growth | +54% | +4% |
+| Citations, draft → final | 23 → 11 | 12 → 17 |
+| Characters per citation (final) | 998 | 272 |
+| Numeric claims traceable to the evidence | not measurable | 4 of 4 |
+
+Before the fix, the Critic offered an *illustrative* example — "load-balance loss reduced from
+0.12 to 0.04, routing latency cut by 23%" — and the Writer copied those invented figures into
+the final report as findings. `0.12` appears in exactly two places in that run: the critique,
+and the report. The loop was manufacturing hallucinations rather than catching them, and the
+revision grew 54% while shedding half its citations.
+
+Three changes fixed it:
+
+- **The Critic and Reviser now receive the retrieved evidence**, not just the draft. Neither
+  could previously tell a supported claim from a merely fluent one.
+- **The Critic may not invent example figures**, or request content the evidence cannot support.
+- **The Reviser is told that any number in a critique is illustrative** and may never enter the
+  report, and `## Evidence Gaps` gives it somewhere to record what the sources do not cover.
+
+Prompts live in [`prompts/`](prompts/) as plain text, so wording can be tuned without touching
+Python. `capture_run.py` dumps every stage — including the exact retrieved chunks — so a run can
+be audited afterwards.
+
+*Caveat: one run per condition, and the two runs retrieved different sources, since changing the
+planner changed the searches. The fabrication trace is exact; the density figures are indicative,
+not a benchmark.*
 
 ## How to run locally
 
@@ -90,6 +123,13 @@ python searcher.py    # prints the URLs a search returns
 python smoke_test.py  # full pipeline with the LLM stubbed - no API key needed
 ```
 
+To audit a run, dump every stage — plan, URLs, the exact retrieved chunks, draft, critique and
+final report — into one file:
+
+```bash
+python capture_run.py "What are the latest breakthroughs in Mixture of Experts?"
+```
+
 ## Deploying to Hugging Face Spaces
 
 1. Create a Space with SDK **Gradio**.
@@ -109,7 +149,7 @@ downloads its weights, which are cached for every run after that.
 | Env var | Default | Purpose |
 | --- | --- | --- |
 | `GROQ_API_KEY` | — | Required. Free at [console.groq.com](https://console.groq.com) |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Swap in any Groq-hosted model |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Any chat model your Groq account lists |
 
 Tune `MAX_RESULTS_PER_QUERY` and `CHUNKS_PER_SUB_QUERY` in [main.py](main.py) to trade
 breadth against latency.

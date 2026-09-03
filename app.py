@@ -125,7 +125,7 @@ with gr.Blocks(**_BLOCKS_KWARGS) as demo:
 
     gr.Examples(examples=EXAMPLES, inputs=query_box, label="Try one")
     gr.Markdown(
-        "Runs on Groq (`llama-3.3-70b-versatile`), DuckDuckGo and local "
+        "Runs on Groq (`openai/gpt-oss-120b`), DuckDuckGo and local "
         "`all-MiniLM-L6-v2` embeddings. A full run takes 60–120s."
     )
 

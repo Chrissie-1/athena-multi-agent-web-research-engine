@@ -3,7 +3,7 @@
 from typing import List, Tuple
 
 from models import SubQuery
-from utils import call_llm
+from utils import call_llm, load_prompt, render
 
 
 def build_source_registry(sub_queries: List[SubQuery]) -> Tuple[str, List[str]]:
@@ -28,56 +28,18 @@ def build_source_registry(sub_queries: List[SubQuery]) -> Tuple[str, List[str]]:
     return "\n".join(blocks), references
 
 
-DRAFT_PROMPT = """You are a technical research writer. Write a comprehensive, structured report
-answering: "{query}"
-
-Rules:
-- Use ONLY the provided context. If the context does not cover something, say so explicitly
-  instead of inventing it.
-- Cite every factual claim inline as [Source X], where X is the source number given in the context.
-- Do not invent source numbers, and do not add a references list (it is appended automatically).
-- Be concrete: prefer numbers, model names, and dates over adjectives.
-
-Structure the report with exactly these headings:
-## Summary
-## Key Findings
-## Technical Details
-## Future Implications
-
-Context:
-{context}
-
-Report:"""
-
-
-REVISE_PROMPT = """You are the same technical research writer, revising after peer review.
-
-Original question: "{query}"
-
-Your draft:
-{draft}
-
-Reviewer's critique:
-{critique}
-
-Rewrite the report so that every critique point is addressed. Keep the same four headings
-(## Summary, ## Key Findings, ## Technical Details, ## Future Implications) and the same
-[Source X] citation format with the same source numbers. Where the reviewer flags a claim the
-evidence does not support, either remove it or mark it explicitly as a limitation rather than
-inventing a new citation. Do not mention the review process itself.
-
-Revised report:"""
-
-
 def write_draft(query: str, sub_queries: List[SubQuery], stream: bool = False):
     context, _ = build_source_registry(sub_queries)
-    return call_llm(DRAFT_PROMPT.format(query=query, context=context), stream=stream)
+    prompt = render(load_prompt("writer_draft"), query=query, context=context)
+    return call_llm(prompt, stream=stream)
 
 
-def revise_report(query: str, draft: str, critique: str, stream: bool = False):
-    return call_llm(
-        REVISE_PROMPT.format(query=query, draft=draft, critique=critique), stream=stream
+def revise_report(query: str, draft: str, critique: str, context: str, stream: bool = False):
+    """The reviser gets the evidence too, so it can refuse a finding the evidence contradicts."""
+    prompt = render(
+        load_prompt("writer_revise"), query=query, context=context, draft=draft, critique=critique
     )
+    return call_llm(prompt, stream=stream)
 
 
 def format_references(references: List[str]) -> str:

@@ -12,6 +12,7 @@ from planner import plan_research
 from reader import fetch_and_chunk
 from retriever import retrieve_relevant_chunks
 from searcher import search_web
+from utils import normalize_citations
 from writer import build_source_registry, format_references, revise_report, write_draft
 
 # Status lines carry emoji; a default Windows console is cp1252 and would raise.
@@ -59,19 +60,21 @@ def research_stream(query: str) -> Iterator[Tuple[str, ResearchState]]:
         yield "⚠️ **No sources retrieved**", state
         return
 
-    yield "✍️ **Drafting** — writing the first report with citations...", state
-    state.draft_report = write_draft(query, state.sub_queries)
+    context, state.references = build_source_registry(state.sub_queries)
 
-    yield "🧐 **Critiquing** — reviewing the draft for gaps and unsupported claims...", state
-    state.critique = critique_draft(query, state.draft_report)
+    yield "✍️ **Drafting** — writing the first report with citations...", state
+    state.draft_report = normalize_citations(write_draft(query, state.sub_queries))
+
+    yield "🧐 **Critiquing** — checking the draft against the evidence...", state
+    state.critique = critique_draft(query, state.draft_report, context)
 
     yield "🪞 **Reflecting** — rewriting the report to answer the critique...", state
-    for token in revise_report(query, state.draft_report, state.critique, stream=True):
+    for token in revise_report(query, state.draft_report, state.critique, context, stream=True):
         state.final_report += token
         yield "🪞 **Reflecting** — rewriting the report to answer the critique...", state
 
-    _, state.references = build_source_registry(state.sub_queries)
-    state.final_report = state.final_report.strip() + format_references(state.references)
+    state.final_report = normalize_citations(state.final_report.strip())
+    state.final_report += format_references(state.references)
 
     elapsed = time.time() - started
     yield (
